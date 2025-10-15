@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bauprojekt – Kostenrechner &amp; Budgetplan</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root{--bg:#0b132b;--card:#1c2541;--muted:#3a506b;--accent:#5bc0be;--text:#edf2f4}
+    body{background:linear-gradient(180deg,var(--bg),#111827);color:var(--text)}
+    .navbar{background:rgba(28,37,65,.85);backdrop-filter:saturate(180%) blur(6px)}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:1rem}
+    .form-control,.form-select{background:#0f172a;border:1px solid #263249;color:#e5e7eb}
+    .form-control:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 .25rem rgba(91,192,190,.25)}
+    .btn-accent{background:var(--accent);border:none;color:#08222b}
+    .btn-accent:hover{filter:brightness(.95)}
+    .table thead th{position:sticky;top:0;background:#0f172a;border-bottom:2px solid #263249;z-index:2}
+    .badge-cat{font-weight:600;letter-spacing:.2px}
+    .money{font-variant-numeric:tabular-nums}
+    .pointer{cursor:pointer}
+    .small-muted{color:#a3b1c2;font-size:.9rem}
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="#"><i class="bi bi-house-gear"></i> Bau‑Kostenrechner</a>
+    <div class="d-flex gap-2 ms-auto">
+      <button id="btnSave" class="btn btn-sm btn-accent"><i class="bi bi-save"></i> Projekt speichern</button>
+      <button id="btnLoad" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#loadModal"><i class="bi bi-folder2-open"></i> Laden</button>
+      <button id="btnExport" class="btn btn-sm btn-outline-light"><i class="bi bi-filetype-json"></i> Export</button>
+      <label class="btn btn-sm btn-outline-light mb-0 pointer"><i class="bi bi-upload"></i> Import <input id="importFile" type="file" accept="application/json" hidden></label>
+    </div>
+  </div>
+</nav>
+
+<main class="container my-4">
+  <div class="row g-4">
+    <div class="col-12">
+      <div class="card p-3 p-md-4">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label">Projektname</label>
+            <input id="projectName" class="form-control" placeholder="z.B. Haus Lochau – 110 m²"/>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">MwSt (%)</label>
+            <input id="vat" type="number" step="0.1" class="form-control" value="20"/>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Reserve/Buffer (%)</label>
+            <input id="contingency" type="number" step="0.5" class="form-control" value="10"/>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Währung</label>
+            <select id="currency" class="form-select"><option>€</option><option>CHF</option><option>$</option></select>
+          </div>
+          <div class="col-md-2">
+            <button id="btnAddCategory" class="btn btn-outline-light w-100"><i class="bi bi-plus-lg"></i> Kategorie</button>
+          </div>
+        </div>
+        <p class="small-muted mt-2 mb-0">Tipp: Mengen können in m², m³, lfm oder Stück erfasst werden. Pauschalen einfach mit Einheit „Pauschale“ anlegen.</p>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card p-3 p-md-4 h-100">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">Positionen</h5>
+          <button id="btnAddItem" class="btn btn-sm btn-accent"><i class="bi bi-plus-circle"></i> Position</button>
+        </div>
+        <div class="table-responsive" style="max-height:60vh">
+          <table class="table table-dark table-sm align-middle" id="itemsTable">
+            <thead>
+              <tr>
+                <th style="min-width:160px">Kategorie</th>
+                <th style="min-width:200px">Bezeichnung</th>
+                <th style="min-width:90px">Einheit</th>
+                <th style="min-width:110px" class="text-end">Menge</th>
+                <th style="min-width:130px" class="text-end">EP (netto)</th>
+                <th style="min-width:130px" class="text-end">Summe (netto)</th>
+                <th style="min-width:70px"></th>
+              </tr>
+            </thead>
+            <tbody id="itemsBody"></tbody>
+            <tfoot>
+              <tr>
+                <th colspan="5" class="text-end">Zwischensumme (netto)</th>
+                <th class="text-end money" id="subtotalCell">€ 0,00</th>
+                <th></th>
+              </tr>
+              <tr>
+                <th colspan="5" class="text-end">MwSt</th>
+                <th class="text-end money" id="vatCell">€ 0,00</th>
+                <th></th>
+              </tr>
+              <tr>
+                <th colspan="5" class="text-end">Reserve</th>
+                <th class="text-end money" id="contCell">€ 0,00</th>
+                <th></th>
+              </tr>
+              <tr>
+                <th colspan="5" class="text-end">Gesamtsumme (brutto inkl. Reserve)</th>
+                <th class="text-end money fs-5" id="totalCell">€ 0,00</th>
+                <th></th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card p-3 p-md-4 mb-4">
+        <h5>Verteilung je Kategorie</h5>
+        <canvas id="catChart" height="200"></canvas>
+        <div class="small-muted mt-2">Vergleich: euer Projekt vs. Benchmark (SFH 100–130 m²).</div>
+      </div>
+      <div class="card p-3 p-md-4">
+        <h5>Benchmark &amp; Vergleich</h5>
+        <div class="table-responsive">
+          <table class="table table-dark table-sm">
+            <thead><tr><th>Kategorie</th><th class="text-end">Euer Anteil</th><th class="text-end">Benchmark*</th><th class="text-end">Δ‑Punkte</th></tr></thead>
+            <tbody id="benchBody"></tbody>
+          </table>
+        </div>
+        <p class="small-muted mb-0">* Richtwerte Mitte der typischen Spannen für Neubau EFH in AT: Rohbau 30%, Dach 10%, Fenster/Türen 10%, Haustechnik 18%, Innenausbau 22%, Außenanlagen 6%, Planung/Nebenkosten 12%. Eure Detailpositionen werden automatisch diesen Clustern zugeordnet.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Load modal -->
+<div class="modal fade" id="loadModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-header"><h5 class="modal-title">Projekt laden</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div id="savedList" class="list-group"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const currencyEl = document.getElementById('currency');
+const vatEl = document.getElementById('vat');
+const contEl = document.getElementById('contingency');
+const subtotalCell = document.getElementById('subtotalCell');
+const vatCell = document.getElementById('vatCell');
+const contCell = document.getElementById('contCell');
+const totalCell = document.getElementById('totalCell');
+const itemsBody = document.getElementById('itemsBody');
+const benchBody = document.getElementById('benchBody');
+const projectNameEl = document.getElementById('projectName');
+
+// Category clusters (for benchmark mapping)
+const CLUSTERS = {
+  'Rohbau': ['Ziegel','Beton','Bewehrung/Stahl','Schalung','Mörtel','Kran/Gerüst','Bodenplatte','Keller','Mauerwerk','Fundament'],
+  'Dach': ['Dachstuhl','Dachdeckung','Spengler','Dämmung Dach','Dachfenster'],
+  'Fenster/Türen': ['Fenster','Haustür','Innentüren','Portale'],
+  'Haustechnik': ['Heizung','Lüftung','Sanitär','Elektro','Photovoltaik','Speicher','Wärmepumpe','FB-Heizung'],
+  'Innenausbau': ['Estrich','Bodenbelag','Parkett','Fliesen','Vinyl','Trockenbau','Putz','Maler','Treppe','Küche (Pauschale)','Möbel (Pauschale)'],
+  'Außenanlagen': ['Terrasse','Pflaster','Zaun','Carport','Erdarbeiten','Drainage','Zisterne','Garten'],
+  'Planung/Nebenkosten': ['Statik','Planung','Genehmigungen','Bauherrenkoordination','Bauleitung','Vermessung','Prüfungen']
+};
+
+const BENCHMARK = { // midpoints in percent
+  'Rohbau': 30, 'Dach': 10, 'Fenster/Türen': 10, 'Haustechnik': 18, 'Innenausbau': 22, 'Außenanlagen': 6, 'Planung/Nebenkosten': 12
+};
+
+const DEFAULT_CATEGORIES = Object.keys(CLUSTERS);
+
+const DEFAULT_ITEMS = [
+  {category:'Rohbau', name:'Ziegel (25er)', unit:'m²', qty:0, price:0},
+  {category:'Rohbau', name:'Beton C25/30', unit:'m³', qty:0, price:0},
+  {category:'Rohbau', name:'Bodenplatte', unit:'m³', qty:0, price:0},
+  {category:'Rohbau', name:'Bewehrung/Stahl', unit:'kg', qty:0, price:0},
+  {category:'Dach', name:'Dachstuhl (Holz)', unit:'m³', qty:0, price:0},
+  {category:'Dach', name:'Dachdeckung Ziegel', unit:'m²', qty:0, price:0},
+  {category:'Fenster/Türen', name:'Fenster (3-fach)', unit:'Stk', qty:0, price:0},
+  {category:'Fenster/Türen', name:'Innentüren', unit:'Stk', qty:0, price:0},
+  {category:'Haustechnik', name:'Wärmepumpe', unit:'Pauschale', qty:1, price:0},
+  {category:'Haustechnik', name:'Fußbodenheizung', unit:'m²', qty:0, price:0},
+  {category:'Haustechnik', name:'Sanitär Rohinstallation', unit:'Pauschale', qty:1, price:0},
+  {category:'Haustechnik', name:'Elektro (Kabel/Schalter)', unit:'Pauschale', qty:1, price:0},
+  {category:'Innenausbau', name:'Estrich', unit:'m²', qty:0, price:0},
+  {category:'Innenausbau', name:'Parkett', unit:'m²', qty:0, price:0},
+  {category:'Innenausbau', name:'Fliesen', unit:'m²', qty:0, price:0},
+  {category:'Innenausbau', name:'Trockenbau (GK)', unit:'m²', qty:0, price:0},
+  {category:'Innenausbau', name:'Putz & Maler', unit:'m²', qty:0, price:0},
+  {category:'Außenanlagen', name:'Terrassenplatten', unit:'m²', qty:0, price:0},
+  {category:'Außenanlagen', name:'Pflaster/Einfahrt', unit:'m²', qty:0, price:0},
+  {category:'Planung/Nebenkosten', name:'Statik & Planung', unit:'Pauschale', qty:1, price:0},
+  {category:'Planung/Nebenkosten', name:'Genehmigungen/Abgaben', unit:'Pauschale', qty:1, price:0}
+];
+
+let state = {
+  meta: {currency:'€', vat:20, contingency:10, name:''},
+  items: JSON.parse(JSON.stringify(DEFAULT_ITEMS)),
+  categories: [...DEFAULT_CATEGORIES]
+};
+
+function fmt(n){
+  const cur = state.meta.currency || '€';
+  return cur+" " + (Number(n)||0).toLocaleString('de-AT',{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function rebuildRows(){
+  itemsBody.innerHTML='';
+  for(const [idx,item] of state.items.entries()){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <select class="form-select form-select-sm catSel">${state.categories.map(c=>`<option ${c===item.category?'selected':''}>${c}</option>`).join('')}</select>
+      </td>
+      <td><input class="form-control form-control-sm nameInput" value="${item.name||''}" placeholder="Bezeichnung"></td>
+      <td>
+        <select class="form-select form-select-sm unitSel">
+          ${['m²','m³','lfm','Stk','kg','Pauschale'].map(u=>`<option ${u===item.unit?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </td>
+      <td class="text-end"><input type="number" step="0.01" class="form-control form-control-sm text-end qtyInput" value="${item.qty}"></td>
+      <td class="text-end"><input type="number" step="0.01" class="form-control form-control-sm text-end priceInput" value="${item.price}"></td>
+      <td class="text-end money lineTotal">${fmt(item.qty*item.price)}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-light moveUp" title="nach oben"><i class="bi bi-arrow-up"></i></button>
+        <button class="btn btn-sm btn-outline-light moveDown" title="nach unten"><i class="bi bi-arrow-down"></i></button>
+        <button class="btn btn-sm btn-outline-danger delRow" title="löschen"><i class="bi bi-trash"></i></button>
+      </td>`;
+    itemsBody.appendChild(tr);
+  }
+  wireRowEvents();
+  recalc();
+}
+
+function wireRowEvents(){
+  [...itemsBody.querySelectorAll('tr')].forEach((tr,i)=>{
+    tr.querySelector('.catSel').addEventListener('change',e=>{state.items[i].category=e.target.value; recalc(); buildBench(); drawChart();});
+    tr.querySelector('.nameInput').addEventListener('input',e=>{state.items[i].name=e.target.value;});
+    tr.querySelector('.unitSel').addEventListener('change',e=>{state.items[i].unit=e.target.value;});
+    tr.querySelector('.qtyInput').addEventListener('input',e=>{state.items[i].qty=parseFloat(e.target.value)||0; recalc();});
+    tr.querySelector('.priceInput').addEventListener('input',e=>{state.items[i].price=parseFloat(e.target.value)||0; recalc();});
+    tr.querySelector('.delRow').addEventListener('click',()=>{state.items.splice(i,1); rebuildRows();});
+    tr.querySelector('.moveUp').addEventListener('click',()=>{ if(i>0){[state.items[i-1],state.items[i]]=[state.items[i],state.items[i-1]]; rebuildRows();}});
+    tr.querySelector('.moveDown').addEventListener('click',()=>{ if(i<state.items.length-1){[state.items[i+1],state.items[i]]=[state.items[i],state.items[i+1]]; rebuildRows();}});
+  });
+}
+
+function recalc(){
+  // line totals
+  [...itemsBody.querySelectorAll('tr')].forEach((tr,i)=>{
+    const t = state.items[i].qty*state.items[i].price;
+    tr.querySelector('.lineTotal').textContent = fmt(t);
+  });
+  const subtotal = state.items.reduce((s,it)=>s+ (it.qty*it.price),0);
+  const vat = subtotal * ((parseFloat(vatEl.value)||0)/100);
+  const cont = subtotal * ((parseFloat(contEl.value)||0)/100);
+  const total = subtotal + vat + cont;
+  subtotalCell.textContent = fmt(subtotal);
+  vatCell.textContent = fmt(vat);
+  contCell.textContent = fmt(cont);
+  totalCell.textContent = fmt(total);
+  drawChart();
+  buildBench();
+  localStorage.setItem('bauCalc_autosave', JSON.stringify(state));
+}
+
+function addItem(){
+  state.items.push({category:state.categories[0], name:'Neue Position', unit:'Pauschale', qty:1, price:0});
+  rebuildRows();
+}
+
+function addCategory(){
+  const name = prompt('Name der neuen Kategorie?');
+  if(!name) return;
+  state.categories.push(name);
+  rebuildRows();
+}
+
+// Chart
+let catChart;
+function drawChart(){
+  const byCat = {};
+  for(const c of state.categories) byCat[c]=0;
+  for(const it of state.items){ byCat[it.category]=(byCat[it.category]||0)+(it.qty*it.price); }
+  const labels = Object.keys(byCat).filter(k=>byCat[k]>0);
+  const data = labels.map(k=>byCat[k]);
+  if(catChart){catChart.destroy();}
+  const ctx = document.getElementById('catChart');
+  catChart = new Chart(ctx,{type:'doughnut', data:{labels, datasets:[{data}]}, options:{plugins:{legend:{position:'bottom'}}, cutout:'55%'}});
+}
+
+function clusterOf(name){
+  for(const [cluster,keys] of Object.entries(CLUSTERS)){
+    if(keys.some(k=>name.toLowerCase().includes(k.toLowerCase()))) return cluster;
+  }
+  return null;
+}
+
+function buildBench(){
+  // aggregate to clusters
+  const total = state.items.reduce((s,it)=>s+it.qty*it.price,0) || 1;
+  const clusterTotals = Object.fromEntries(Object.keys(BENCHMARK).map(k=>[k,0]));
+  for(const it of state.items){
+    const c = clusterOf(it.name) || (BENCHMARK[it.category]!==undefined ? it.category : null);
+    if(c) clusterTotals[c]+= it.qty*it.price;
+  }
+  benchBody.innerHTML='';
+  for(const [cluster, benchPct] of Object.entries(BENCHMARK)){
+    const share = (clusterTotals[cluster]/total)*100;
+    const delta = share - benchPct;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${cluster}</td><td class="text-end">${share.toFixed(1)}%</td><td class="text-end">${benchPct.toFixed(1)}%</td><td class="text-end">${delta>0?'+':''}${delta.toFixed(1)}%</td>`;
+    benchBody.appendChild(tr);
+  }
+}
+
+// Save/Load/Export/Import
+function saveProject(){
+  const name = projectNameEl.value?.trim();
+  if(!name){ alert('Bitte Projektnamen eingeben.'); return; }
+  const all = JSON.parse(localStorage.getItem('bauCalc_projects')||'{}');
+  all[name]=state;
+  localStorage.setItem('bauCalc_projects', JSON.stringify(all));
+  alert('Projekt gespeichert.');
+  buildSavedList();
+}
+
+function buildSavedList(){
+  const list = document.getElementById('savedList');
+  list.innerHTML='';
+  const all = JSON.parse(localStorage.getItem('bauCalc_projects')||'{}');
+  Object.keys(all).forEach(name=>{
+    const a = document.createElement('a');
+    a.className='list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+    a.innerHTML = `<span>${name}</span><span class="btn-group btn-group-sm"><button class="btn btn-outline-light" data-name="${name}" data-act="load"><i class="bi bi-download"></i></button><button class="btn btn-outline-warning" data-name="${name}" data-act="dup"><i class="bi bi-files"></i></button><button class="btn btn-outline-danger" data-name="${name}" data-act="del"><i class="bi bi-trash"></i></button></span>`;
+    list.appendChild(a);
+  });
+  list.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const n = e.currentTarget.getAttribute('data-name');
+      const act = e.currentTarget.getAttribute('data-act');
+      const all = JSON.parse(localStorage.getItem('bauCalc_projects')||'{}');
+      if(act==='load'){
+        const s = all[n]; if(!s) return; state = s; applyMeta(); rebuildRows(); projectNameEl.value=n; bootstrap.Modal.getInstance(document.getElementById('loadModal')).hide();
+      }else if(act==='dup'){
+        const newName = prompt('Neuer Name für Kopie:', n+' – Kopie');
+        if(newName){ all[newName]=all[n]; localStorage.setItem('bauCalc_projects', JSON.stringify(all)); buildSavedList(); }
+      }else if(act==='del'){
+        if(confirm('Projekt löschen?')){ delete all[n]; localStorage.setItem('bauCalc_projects', JSON.stringify(all)); buildSavedList(); }
+      }
+    });
+  });
+}
+
+function applyMeta(){
+  currencyEl.value = state.meta.currency || '€';
+  vatEl.value = state.meta.vat ?? 20;
+  contEl.value = state.meta.contingency ?? 10;
+}
+
+function exportJSON(){
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (projectNameEl.value?.trim()||'bauprojekt') + '.json';
+  a.click();
+}
+
+function importJSON(file){
+  const reader = new FileReader();
+  reader.onload = e=>{ try{ state = JSON.parse(e.target.result); applyMeta(); rebuildRows(); alert('Import erfolgreich.'); }catch(err){ alert('Import fehlgeschlagen: '+err.message);} };
+  reader.readAsText(file);
+}
+
+// Events
+vatEl.addEventListener('input', ()=>{state.meta.vat=parseFloat(vatEl.value)||0; recalc();});
+contEl.addEventListener('input', ()=>{state.meta.contingency=parseFloat(contEl.value)||0; recalc();});
+currencyEl.addEventListener('change', ()=>{state.meta.currency=currencyEl.value; recalc();});
+document.getElementById('btnAddItem').addEventListener('click', addItem);
+document.getElementById('btnAddCategory').addEventListener('click', addCategory);
+document.getElementById('btnSave').addEventListener('click', saveProject);
+document.getElementById('btnLoad').addEventListener('click', buildSavedList);
+document.getElementById('btnExport').addEventListener('click', exportJSON);
+document.getElementById('importFile').addEventListener('change', e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); });
+projectNameEl.addEventListener('input', ()=>{state.meta.name=projectNameEl.value});
+
+// Autosave restore
+(function init(){
+  const auto = localStorage.getItem('bauCalc_autosave');
+  if(auto){ try{ state = JSON.parse(auto);}catch{}}
+  applyMeta();
+  rebuildRows();
+  drawChart();
+  buildBench();
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
