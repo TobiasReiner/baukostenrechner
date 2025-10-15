@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baukostenrechner</title>
+    <!-- Tailwind CSS via CDN for a quick, modern design -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <!-- Chart.js for the cost distribution chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="container mx-auto">
+        <h1 class="text-2xl font-bold mb-4">Baukostenrechner</h1>
+
+        <!-- Einstellungen für das Projekt -->
+        <div id="project-settings" class="mb-6 p-4 bg-white rounded shadow">
+            <h2 class="text-xl font-semibold mb-2">Projekteinstellungen</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="projectName">Projektname</label>
+                    <input id="projectName" type="text" class="border p-2 rounded w-full" placeholder="z.B. Eigenheim" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="vatRate">MwSt (%)</label>
+                    <input id="vatRate" type="number" class="border p-2 rounded w-full" value="20" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="reserveRate">Reserve (%)</label>
+                    <input id="reserveRate" type="number" class="border p-2 rounded w-full" value="10" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="currency">Währung</label>
+                    <input id="currency" type="text" class="border p-2 rounded w-full" value="EUR" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Container für Kategorien und Positionen -->
+        <div id="categories" class="space-y-6"></div>
+
+        <!-- Buttons für das Hinzufügen von Kategorien und Speicheraktionen -->
+        <div class="mt-4 flex flex-wrap gap-3">
+            <button id="addCategory" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Kategorie hinzufügen</button>
+            <button id="saveProject" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Projekt speichern</button>
+            <button id="exportProject" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">Exportieren (JSON)</button>
+            <label class="cursor-pointer bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
+                Importieren
+                <input type="file" id="importFile" accept="application/json" class="hidden" />
+            </label>
+        </div>
+
+        <!-- Anzeige von Gesamtsummen -->
+        <div id="totals" class="mt-6 p-4 bg-white rounded shadow"></div>
+
+        <!-- Chart für die Kostenverteilung -->
+        <div class="mt-6 p-4 bg-white rounded shadow">
+            <h2 class="text-xl font-semibold mb-4">Kostenverteilung</h2>
+            <canvas id="costChart" height="200"></canvas>
+        </div>
+
+        <!-- Benchmark-Vergleich -->
+        <div id="benchmark" class="mt-6 p-4 bg-white rounded shadow"></div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
